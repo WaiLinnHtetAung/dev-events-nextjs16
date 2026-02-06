@@ -11,7 +11,7 @@ export interface IEvent extends Document {
   location: string;
   date: string;
   time: string;
-  mode: string;
+  mode: 'online' | 'offline' | 'hybrid'; // Literal types for better TS support
   audience: string;
   agenda: string[];
   organizer: string;
@@ -29,7 +29,7 @@ const eventSchema = new Schema<IEvent>(
     },
     slug: {
       type: String,
-      unique: true,
+      unique: true, // This already creates a unique index automatically
       trim: true,
     },
     description: {
@@ -99,55 +99,46 @@ const eventSchema = new Schema<IEvent>(
     },
   },
   {
-    timestamps: true, // Automatically manage createdAt and updatedAt
+    timestamps: true,
   }
 );
 
-// Pre-save hook: Generate slug from title and normalize date/time
-eventSchema.pre('save', function (next) {
-  // Generate slug only if title is new or modified
-  if (this.isModified('title')) {
+// Pre-save hook using ASYNC/AWAIT (Fixes "next is not a function" error)
+eventSchema.pre('save', async function (this: IEvent) {
+  // 1. Generate slug only if title is new or modified
+  if (this.isModified('title') || this.isNew) {
     this.slug = this.title
       .toLowerCase()
       .trim()
-      .replace(/[^\w\s-]/g, '') // Remove special characters
-      .replace(/\s+/g, '-') // Replace spaces with hyphens
-      .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
-      .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+      .replace(/[^\w\s-]/g, '') 
+      .replace(/\s+/g, '-') 
+      .replace(/-+/g, '-') 
+      .replace(/^-+|-+$/g, ''); 
   }
 
-  // Normalize date to ISO format if modified
+  // 2. Normalize date to ISO format if modified
   if (this.isModified('date')) {
-    try {
-      const parsedDate = new Date(this.date);
-      if (isNaN(parsedDate.getTime())) {
-        return next(new Error('Invalid date format'));
-      }
-      // Store as ISO date string (YYYY-MM-DD)
-      this.date = parsedDate.toISOString().split('T')[0];
-    } catch (error) {
-      return next(new Error('Invalid date format'));
+    const parsedDate = new Date(this.date);
+    if (isNaN(parsedDate.getTime())) {
+      throw new Error('Invalid date format'); // Mongoose will catch this error
     }
+    this.date = parsedDate.toISOString().split('T')[0];
   }
 
-  // Normalize time format (HH:MM) if modified
+  // 3. Normalize time format (HH:MM) if modified
   if (this.isModified('time')) {
     const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
     if (!timeRegex.test(this.time)) {
-      return next(new Error('Time must be in HH:MM format'));
+      throw new Error('Time must be in HH:MM format');
     }
-    // Ensure two-digit format for hours and minutes
     const [hours, minutes] = this.time.split(':');
     this.time = `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
   }
-
-  next();
 });
 
-// Create unique index on slug for fast lookups
-eventSchema.index({ slug: 1 });
+// NOTE: I removed the duplicate manual index definition for "slug" here 
+// because unique: true in the schema already handles it.
 
-// Export the model (reuse existing model in development to prevent OverwriteModelError)
 const Event: Model<IEvent> =
   mongoose.models.Event || mongoose.model<IEvent>('Event', eventSchema);
 

@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 // Define the MongoDB URI from environment variables
-const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_URI = process.env.MONGODBURI;
 
 if (!MONGODB_URI) {
   throw new Error(

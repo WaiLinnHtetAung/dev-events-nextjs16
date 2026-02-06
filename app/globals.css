@@ -115,6 +115,10 @@
     @apply bg-background text-foreground;
   }
 
+  body ul li {
+    list-style-type: none;
+  }
+
   main {
     @apply mx-auto container flex flex-col sm:px-10 px-5 py-10;
   }
